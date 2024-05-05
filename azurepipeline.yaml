@@ -1,0 +1,70 @@
+pool:
+  name: PHX
+
+variables:
+  # Ensure to set the correct path to your C# project files
+  RestoreBuildProjects: '**/*.csproj'
+  # Ensure that BuildConfiguration variable is defined and settable at queue time
+  BuildConfiguration: 'Release'  # You can adjust this value as needed
+  BuildPlatform: 'any cpu'
+
+trigger:
+  branches:
+    include:
+      - master
+
+pr:
+  branches:
+    include:
+      - '*'
+
+stages:
+- stage: PR_Build
+  displayName: 'PR Build'
+  jobs:
+  - job: PR_Build_Job
+    displayName: 'Build and Publish on PR'
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: Restore
+      inputs:
+        command: restore
+        projects: '$(RestoreBuildProjects)'
+
+    - task: DotNetCoreCLI@2
+      displayName: Build
+      inputs:
+        projects: '$(RestoreBuildProjects)'
+        arguments: '--configuration $(BuildConfiguration)'
+  
+- stage: Main_Build
+  displayName: 'Main Build'
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+  jobs:
+  - job: Main_Build_Job
+    displayName: 'Build and Publish on Main'
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: Restore
+      inputs:
+        command: restore
+        projects: '$(RestoreBuildProjects)'
+
+    - task: DotNetCoreCLI@2
+      displayName: Build
+      inputs:
+        projects: '$(RestoreBuildProjects)'
+        arguments: '--configuration $(BuildConfiguration)'
+
+    - task: DotNetCoreCLI@2
+      displayName: Publish
+      inputs:
+        command: publish
+        publishWebProjects: True
+        arguments: '--configuration $(BuildConfiguration) --output $(build.artifactstagingdirectory)'
+        zipAfterPublish: True
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifact'
+      inputs:
+        PathtoPublish: '$(build.artifactstagingdirectory)'
